@@ -42,9 +42,6 @@ class MahjongGuessPlugin(Star):
             "round_wind": round_wind,
         }
 
-        rules_path = os.path.join(self.plugin_dir, "temp_rules.png")
-        render_rules(hand, rules_path)
-        yield event.image_result(rules_path)
         yield event.plain_result(
             f"【立直麻将猜胡牌】开始！\n"
             f"自风: {wind_names[seat_wind]}  场风: {wind_names[round_wind]}\n"
