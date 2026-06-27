@@ -3,7 +3,7 @@ import json
 import random
 import logging
 from astrbot.api.all import *
-from .mahjong import generate_valid_hand, parse_hand, compare_guess, hand_str, validate_hand, is_valid_hand, find_yaku, describe_result
+from .mahjong import generate_valid_hand, parse_hand, compare_guess, hand_str, validate_hand, is_valid_hand, find_yaku, describe_result, generate_hand_with_yaku
 from .renderer import render_guess, render_rules, render_rules
 
 logger = logging.getLogger("astrbot")
@@ -52,6 +52,31 @@ class MahjongGuessPlugin(Star):
             f"如: w112233 s445566 p77\n"
             f"字牌: z東東東 或 z111\n"
             f"共 {self.max_attempts} 次机会，发送合法胡牌开始猜"
+        )
+
+    @command("随机胡牌")
+    async def random_hand(self, event: AstrMessageEvent):
+        parts = event.message_str.strip().split(maxsplit=1)
+        yaku_filter = parts[1].strip() if len(parts) > 1 else ""
+        seat_wind = random.randint(1, 4)
+        round_wind = random.randint(1, 4)
+        wind_names = {1: "東", 2: "南", 3: "西", 4: "北"}
+
+        hand = generate_hand_with_yaku(yaku_filter, seat_wind, round_wind)
+        if hand is None:
+            yield event.plain_result(f"无法生成 {yaku_filter} 牌型，请换一个役种试试。")
+            return
+
+        yaku_list = find_yaku(hand, seat_wind, round_wind)
+        yaku_text = "、".join(yaku_list) if yaku_list else "无役"
+
+        rules_path = os.path.join(self.plugin_dir, "temp_rand.png")
+        render_rules(hand, rules_path)
+        yield event.image_result(rules_path)
+        yield event.plain_result(
+            f"自风: {wind_names[seat_wind]}  场风: {wind_names[round_wind]}\n"
+            f"役种: {yaku_text}\n"
+            f"牌型: {hand_str(hand)}"
         )
 
     @command("结束猜胡牌")
