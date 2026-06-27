@@ -97,112 +97,144 @@ def has_yaku(tiles):
     return len(find_yaku(tiles)) > 0
 
 
-def find_yaku(tiles):
-    """Return list of yaku names present in the hand."""
+def find_yaku(tiles, seat_wind=1, round_wind=1):
+    """Return list of yaku names present in the hand. Winds affect yakuhai detection."""
     yaku = []
-    counts = {}
-    for s, n in tiles:
-        counts[(s, n)] = counts.get((s, n), 0) + 1
+    counts = _count_tiles(tiles)
 
-    all_nums = [n for s, n in tiles if s != "z"]
-    all_suits = [s for s, n in tiles if s != "z"]
-    honor_pairs = sum(1 for (s, n), c in counts.items() if s == "z" and c >= 2)
+    # 国士无双: 13 unique orphans + 1 duplicate
+    orphans_required = set()
+    for s in "wps":
+        orphans_required.add((s, 1))
+        orphans_required.add((s, 9))
+    for n in range(1, 8):
+        orphans_required.add(("z", n))
+    actual = set(tiles)
+    missing = orphans_required - actual
+    if len(missing) <= 1 and len(tiles) == 14:
+        if len(missing) == 0 and any(c == 2 for c in counts.values()):
+            yaku.append("国士无双")
+        elif len(missing) == 1:
+            yaku.append("国士无双")
 
-    # Tanyao: all tiles 2-8, no honors
-    if all(2 <= n <= 8 for s, n in tiles if s != "z") and all(s != "z" for s, n in tiles):
-        yaku.append("断幺九")
+    # 字一色: all honors
+    if all(s == "z" for s, n in tiles):
+        yaku.append("字一色")
 
-    # Yakuhai: triplet of any dragon, plus check
+    # 小四喜: 3 or 4 wind triplets
+    wind_triplets = sum(1 for n in range(1, 5) if counts.get(("z", n), 0) >= 3)
+    wind_pairs = sum(1 for n in range(1, 5) if counts.get(("z", n), 0) == 2)
+    if wind_triplets == 3 and wind_pairs == 1:
+        yaku.append("小四喜")
+    elif wind_triplets == 4:
+        yaku.append("小四喜")
+
+    # 役牌: triplet of seat wind, round wind, or dragon
+    yakuhai_tiles = {("z", seat_wind), ("z", round_wind), ("z", 5), ("z", 6), ("z", 7)}
     for (s, n), c in counts.items():
-        if s == "z" and c >= 3:
+        if (s, n) in yakuhai_tiles and c >= 3:
             yaku.append("役牌")
 
-    # Toitoi: 4 triplets + 1 pair (all melds are triplets)
-    triplets = sum(1 for c in counts.values() if c >= 3)
-    pairs = sum(1 for c in counts.values() if c == 2)
-    if triplets == 4 and pairs == 1:
+    # 断幺九: all 2-8, no honors
+    if all(s != "z" and 2 <= n <= 8 for s, n in tiles):
+        yaku.append("断幺九")
+
+    # 对对和: 4 triplets + 1 pair
+    tri = sum(1 for c in counts.values() if c >= 3)
+    pr = sum(1 for c in counts.values() if c == 2)
+    if tri == 4 and pr == 1:
         yaku.append("对对和")
 
-    # Seven pairs
-    if all(c == 2 or c == 4 for c in counts.values()) and sum(1 for c in counts.values() if c == 2) == 7:
+    # 七对子
+    if len(counts) == 7 and all(c == 2 for c in counts.values()):
         yaku.append("七对子")
 
-    # Iipeikou: two identical chi sequences (same suit, same numbers)
+    # 混一色: one number suit + honors
+    suits_present = set(s for s, n in tiles)
+    number_suits = suits_present - {"z"}
+    if len(number_suits) == 1 and "z" in suits_present and len(suits_present) == 2:
+        yaku.append("混一色")
+
+    # 一气通贯: 1-9 straight in one suit
     for s in "wps":
-        suit_tiles = sorted([n for ss, n in tiles if ss == s])
+        if all(counts.get((s, n), 0) >= 1 for n in range(1, 10)):
+            yaku.append("一气通贯")
+
+    # 三色同刻: same-number triplet in all 3 suits
+    for n in range(1, 10):
+        if all(counts.get((s, n), 0) >= 3 for s in "wps"):
+            yaku.append("三色同刻")
+
+    # 三色同顺: same-number sequence in all 3 suits
+    for start in range(1, 8):
+        seq = [start, start+1, start+2]
+        if all(all(counts.get((s, x), 0) >= 1 for x in seq) for s in "wps"):
+            yaku.append("三色同顺")
+
+    # 一盃口
+    for s in "wps":
+        suit_nums = sorted([n for ss, n in tiles if ss == s])
         for start in range(1, 8):
             seq = [start, start+1, start+2]
-            if suit_tiles.count(start) >= 1 and suit_tiles.count(start+1) >= 1 and suit_tiles.count(start+2) >= 1:
-                # Found at least one copy of this sequence
-                remaining = list(suit_tiles)
-                for x in seq:
+            remaining = list(suit_nums)
+            ok = True
+            for x in seq:
+                if x in remaining:
                     remaining.remove(x)
-                if remaining.count(start) >= 1 and remaining.count(start+1) >= 1 and remaining.count(start+2) >= 1:
-                    yaku.append("一盃口")
+                else:
+                    ok = False
                     break
-
-    # Pinfu: all chi, pair not yakuhai, two-sided wait (simplified)
-    # Just check if hand has 4 chi + non-yakuhai pair
-    chi_count = 0
-    remaining_tiles = list(tiles)
-    # Remove one pair first
-    has_pair = False
-    for (s, n), c in counts.items():
-        if c >= 2:
-            # Check if this pair is valid for pinfu (not yakuhai)
-            if s == "z":
-                continue  # Skip honor pairs for pinfu
-            # Found a non-yakuhai pair
-            remaining_tiles.remove((s, n))
-            remaining_tiles.remove((s, n))
-            has_pair = True
-            break
-    if has_pair:
-        for s in "wps":
-            suit_remain = sorted([n for ss, n in remaining_tiles if ss == s])
-            for start in range(1, 8):
-                seq = [start, start+1, start+2]
-                temp = list(suit_remain)
-                ok = True
+            if ok:
+                remaining2 = list(remaining)
                 for x in seq:
-                    if x in temp:
-                        temp.remove(x)
+                    if x in remaining2:
+                        remaining2.remove(x)
                     else:
                         ok = False
                         break
-                if ok:
-                    chi_count += 1
-                    suit_remain = temp
-        if chi_count == 4:
-            yaku.append("平和")
+            if ok:
+                yaku.append("一盃口")
+                break
 
     return yaku
 
 
-def generate_valid_hand():
-    """Generate a valid 14-tile Riichi mahjong hand (4 melds + 1 pair, at least one yaku)."""
+def generate_valid_hand(seat_wind=1, round_wind=1):
+    """Generate a valid 14-tile Riichi mahjong hand with at least one yaku."""
+    builders = [
+        _build_tanyao, _build_chiitoitsu, _build_toitoi,
+        _build_iipeikou, _build_pinfu, _build_kokushi,
+        _build_sanshoku_doukou, _build_ikkitsuukan,
+        _build_sanshoku_doujun, _build_honitsu, _build_tsuuiisou,
+        _build_shousuushi,
+    ]
     for _ in range(500):
-        yaku_type = random.randint(0, 5)
-        if yaku_type == 0:
-            hand = _build_tanyao()
-        elif yaku_type == 1:
-            hand = _build_yakuhai()
-        elif yaku_type == 2:
-            hand = _build_toitoi()
-        elif yaku_type == 3:
-            hand = _build_chiitoitsu()
-        elif yaku_type == 4:
-            hand = _build_iipeikou()
+        builder = random.choice(builders)
+        if builder in (_build_yakuhai,):
+            # yakuhai needs the specific honor that matches winds
+            honor = random.choice([seat_wind, round_wind, 5, 6, 7])
+            tiles = _build_yakuhai_with_honor(honor)
         else:
-            hand = _build_pinfu()
-        if hand and len(hand) == 14:
-            # Choose a random winning tile
-            tiles = list(hand)
-            random.shuffle(tiles)
-            win_tile = tiles[-1]
-            remaining = sorted(tiles[:13], key=lambda t: ({"w":0,"p":1,"s":2,"z":3}[t[0]], t[1]))
-            return remaining + [win_tile]
-    return _build_chiitoitsu() or _build_yakuhai()
+            tiles = builder()
+        if tiles and len(tiles) == 14:
+            hand = list(tiles)
+            random.shuffle(hand)
+            win_tile = hand[-1]
+            first13 = sorted(hand[:13], key=lambda t: ({"w":0,"p":1,"s":2,"z":3}[t[0]], t[1]))
+            return first13 + [win_tile]
+    return _build_chiitoitsu() or _build_yakuhai_with_honor(5)
+
+
+def _build_yakuhai_with_honor(honor_num):
+    """Hand with specific honor triplet (for yakuhai with seat/round wind)."""
+    tiles = [("z", honor_num)] * 3
+    for _ in range(3):
+        if random.random() < 0.5:
+            tiles += _random_sequence()
+        else:
+            tiles += _random_triplet()
+    tiles += _random_pair()
+    return tiles
 
 
 def _random_sequence(suit=None):
@@ -318,10 +350,110 @@ def _build_pinfu():
     tiles = []
     for _ in range(4):
         tiles += _random_sequence()
-    # Pair: not yakuhai, not the same suit's triplets
     ps = random.choice("wps")
     pn = random.randint(2, 8)
     tiles += [(ps, pn), (ps, pn)]
+    return tiles
+
+
+def _build_kokushi():
+    """国士无双: 13 unique orphans (1,9 + 7 honors) + 1 duplicate."""
+    orphans = []
+    for s in "wps":
+        orphans.append((s, 1))
+        orphans.append((s, 9))
+    for n in range(1, 8):
+        orphans.append(("z", n))
+    dup = random.choice(orphans)
+    return orphans + [dup]
+
+
+def _build_honchantaiyao():
+    """混全带幺九: every meld contains at least one terminal (1,9) or honor."""
+    tiles = []
+    for _ in range(4):
+        kind = random.random()
+        if kind < 0.3:
+            t = random.choice("wps")
+            tiles += [(t, random.choice([1, 2, 3, 7, 8, 9])), (t, random.choice([1, 2, 3])), (t, random.choice([7, 8, 9]))]
+        elif kind < 0.6:
+            su = random.choice("wps")
+            start = random.choice([1, 7])
+            tiles += [(su, start), (su, start+1), (su, start+2)]
+        else:
+            tiles += _random_triplet(random.choice("z"))
+    tiles += _random_pair()
+    return tiles
+
+
+def _build_sanshoku_doukou():
+    """三色同刻: same-number triplet in w, p, s."""
+    num = random.randint(1, 9)
+    tiles = []
+    for s in "wps":
+        tiles += [(s, num)] * 3
+    tiles += _random_triplet()
+    tiles += _random_pair()
+    return tiles
+
+
+def _build_ikkitsuukan():
+    """一气通贯: 1-9 straight in one suit."""
+    suit = random.choice("wps")
+    tiles = [(suit, 1), (suit, 2), (suit, 3), (suit, 4), (suit, 5), (suit, 6), (suit, 7), (suit, 8), (suit, 9)]
+    tiles += _random_triplet()
+    tiles += _random_pair()
+    return tiles
+
+
+def _build_sanshoku_doujun():
+    """三色同顺: same sequence across w/p/s."""
+    start = random.randint(1, 7)
+    tiles = []
+    for s in "wps":
+        tiles += [(s, start), (s, start+1), (s, start+2)]
+    tiles += _random_triplet()
+    tiles += _random_pair()
+    return tiles
+
+
+def _build_honitsu():
+    """混一色: one suit + honors only."""
+    suit = random.choice("wps")
+    tiles = []
+    hon = random.choice([0, 1, 2, 3])
+    for _ in range(4 - hon):
+        if random.random() < 0.5:
+            tiles += _random_sequence(suit)
+        else:
+            tiles += _random_triplet(suit)
+    for _ in range(hon):
+        tiles += _random_triplet("z")
+    tiles += _random_pair()
+    return tiles
+
+
+def _build_tsuuiisou():
+    """字一色: all honor tiles."""
+    tiles = []
+    for _ in range(4):
+        n = random.randint(1, 7)
+        tiles += [("z", n)] * 3
+    n = random.randint(1, 7)
+    tiles += [("z", n), ("z", n)]
+    return tiles
+
+
+def _build_shousuushi():
+    """小四喜: 3 wind triplets + 1 wind pair."""
+    winds = [("z", 1), ("z", 2), ("z", 3), ("z", 4)]
+    random.shuffle(winds)
+    pair_wind = winds[3]
+    tiles = []
+    for i in range(3):
+        tiles += winds[i:i+1] * 3  # triplet
+    tiles += [pair_wind, pair_wind]  # pair
+    tiles += _random_triplet()
     return tiles
 
 
@@ -338,10 +470,23 @@ def validate_hand(tiles):
 
 
 def is_valid_hand(tiles):
-    """Check if 14 tiles form a valid Riichi winning hand (4 melds + 1 pair, or 7 pairs)."""
+    """Check if 14 tiles form a valid Riichi winning hand."""
     if len(tiles) != 14:
         return False
-    return _is_valid_standard(tiles) or _is_chiitoitsu(tiles)
+    return _is_valid_standard(tiles) or _is_chiitoitsu(tiles) or _is_kokushi(tiles)
+
+
+def _is_kokushi(tiles):
+    """国士无双: 13 unique orphans + 1 duplicate."""
+    orphans_needed = set()
+    for s in "wps":
+        orphans_needed.add((s, 1))
+        orphans_needed.add((s, 9))
+    for n in range(1, 8):
+        orphans_needed.add(("z", n))
+    actual = set(tiles)
+    missing = orphans_needed - actual
+    return len(missing) <= 1 and len(tiles) == 14
 
 
 def _count_tiles(tiles):

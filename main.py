@@ -3,7 +3,7 @@ import json
 import random
 import logging
 from astrbot.api.all import *
-from .mahjong import generate_valid_hand, parse_hand, compare_guess, hand_str, validate_hand, is_valid_hand, describe_result
+from .mahjong import generate_valid_hand, parse_hand, compare_guess, hand_str, validate_hand, is_valid_hand, find_yaku, describe_result
 from .renderer import render_guess, render_rules, render_rules
 
 logger = logging.getLogger("astrbot")
@@ -27,12 +27,19 @@ class MahjongGuessPlugin(Star):
             yield event.plain_result("游戏进行中！输入牌型猜胡牌，或发送【结束猜胡牌】退出。")
             return
 
-        hand = generate_valid_hand()
+        seat_wind = random.randint(1, 4)
+        round_wind = random.randint(1, 4)
+        wind_names = {1: "東", 2: "南", 3: "西", 4: "北"}
+        hand = generate_valid_hand(seat_wind, round_wind)
+        yaku_list = find_yaku(hand, seat_wind, round_wind)
+        yaku_text = "、".join(yaku_list) if yaku_list else "无役"
 
         self.sessions[session_id] = {
             "target": hand,
             "history": [],
             "tries": 0,
+            "seat_wind": seat_wind,
+            "round_wind": round_wind,
         }
 
         rules_path = os.path.join(self.plugin_dir, "temp_rules.png")
@@ -40,10 +47,11 @@ class MahjongGuessPlugin(Star):
         yield event.image_result(rules_path)
         yield event.plain_result(
             f"【立直麻将猜胡牌】开始！\n"
+            f"自风: {wind_names[seat_wind]}  场风: {wind_names[round_wind]}\n"
             f"格式：w/p/s/z + 数字或中文\n"
             f"如: w112233 s445566 p77\n"
             f"字牌: z東東東 或 z111\n"
-            f"共 {self.max_attempts} 次机会，发送 14 张牌开始猜"
+            f"共 {self.max_attempts} 次机会，发送合法胡牌开始猜"
         )
 
     @command("结束猜胡牌")
@@ -83,7 +91,12 @@ class MahjongGuessPlugin(Star):
             return
 
         if not is_valid_hand(guess):
-            yield event.plain_result("该牌型不是合法胡牌（需要 4 面子 + 1 雀头），请重新提交。")
+            yield event.plain_result("该牌型不是合法胡牌（需要 4 面子 + 1 雀头 或 国士无双 或 七对子），请重新提交。")
+            return
+
+        has_yaku = find_yaku(guess, session["seat_wind"], session["round_wind"])
+        if not has_yaku:
+            yield event.plain_result("该牌型没有役种，无法胡牌。请确保牌型包含至少一个役种。")
             return
 
         comp = compare_guess(guess, session["target"])
@@ -95,9 +108,9 @@ class MahjongGuessPlugin(Star):
         render_guess(session["history"], session["target"], img_path)
         yield event.image_result(img_path)
 
-        # Text feedback
+        # Text feedback (log only, not sent to chat)
         desc = describe_result(comp)
-        yield event.plain_result(desc)
+        logger.info(f"[mahjong] {desc}")
 
         # Check win/lose
         all_correct = all(s == "correct" for _, s in comp)
