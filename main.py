@@ -3,7 +3,7 @@ import json
 import random
 import logging
 from astrbot.api.all import *
-from .mahjong import generate_valid_hand, parse_hand, compare_guess, hand_str, validate_hand
+from .mahjong import generate_valid_hand, parse_hand, compare_guess, hand_str, validate_hand, describe_result
 from .renderer import render_guess, render_rules
 
 logger = logging.getLogger("astrbot")
@@ -87,6 +87,10 @@ class MahjongGuessPlugin(Star):
         img_path = os.path.join(self.plugin_dir, f"temp_{session_id}.png")
         render_guess(session["history"], session["target"], img_path)
         yield event.image_result(img_path)
+
+        # Text feedback
+        desc = describe_result(comp)
+        yield event.plain_result(desc)
 
         # Check win/lose
         all_correct = all(s == "correct" for _, s in comp)

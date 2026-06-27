@@ -157,156 +157,149 @@ def find_yaku(tiles):
 
 
 def generate_valid_hand():
-    """Generate a valid 14-tile Riichi mahjong hand with at least one yaku."""
-    for _ in range(1000):
-        # Pick a random yaku type to generate
+    """Generate a valid 14-tile Riichi mahjong hand (4 melds + 1 pair, at least one yaku)."""
+    for _ in range(500):
         yaku_type = random.randint(0, 5)
-
         if yaku_type == 0:
-            hand = _generate_tanyao()
+            hand = _build_tanyao()
         elif yaku_type == 1:
-            hand = _generate_yakuhai()
+            hand = _build_yakuhai()
         elif yaku_type == 2:
-            hand = _generate_toitoi()
+            hand = _build_toitoi()
         elif yaku_type == 3:
-            hand = _generate_chiitoitsu()
+            hand = _build_chiitoitsu()
         elif yaku_type == 4:
-            hand = _generate_iipeikou()
+            hand = _build_iipeikou()
         else:
-            hand = _generate_mixed()
+            hand = _build_pinfu()
+        if hand and len(hand) == 14:
+            # Choose a random winning tile
+            tiles = list(hand)
+            random.shuffle(tiles)
+            win_tile = tiles[-1]
+            remaining = sorted(tiles[:13], key=lambda t: ({"w":0,"p":1,"s":2,"z":3}[t[0]], t[1]))
+            return remaining + [win_tile]
+    return _build_chiitoitsu() or _build_yakuhai()
 
-        if hand and len(hand) == 14 and has_yaku(hand):
-            # Make last tile the "winning tile" (ensure it's not just part of a sorted pair)
-            return hand
-    return _generate_tanyao() or _generate_chiitoitsu()
+
+def _random_sequence(suit=None):
+    """Return a random sequence of 3 tiles like ('w',1),('w',2),('w',3)."""
+    if suit is None:
+        suit = random.choice("wps")
+    start = random.randint(1, 7)
+    return [(suit, start), (suit, start+1), (suit, start+2)]
 
 
-def _generate_tanyao():
-    """Generate a tanyao (all simples 2-8, no honors) hand."""
-    suit_counts = {"w": 0, "p": 0, "s": 0}
-    total = 0
-    suits = random.sample("wps", random.randint(1, 3))
-    for s in suits:
-        suit_counts[s] = random.randint(4, 8)
-        total += suit_counts[s]
-    # Trim to 14
-    while total > 14:
-        s = random.choice(suits)
-        if suit_counts[s] > 4:
-            suit_counts[s] -= 1
-            total -= 1
-    while total < 14:
-        s = random.choice(suits)
-        suit_counts[s] += 1
-        total += 1
+def _random_triplet(suit=None, num=None):
+    """Return 3 copies of a random tile."""
+    if suit is None:
+        suit = random.choice("wpsz")
+    if num is None:
+        num = random.randint(2, 8) if suit != "z" else random.randint(1, 7)
+    return [(suit, num), (suit, num), (suit, num)]
 
+
+def _random_pair(suit=None, num=None):
+    """Return 2 copies of a random tile."""
+    if suit is None:
+        suit = random.choice("wpsz")
+    if num is None:
+        num = random.randint(2, 8) if suit != "z" else random.randint(1, 7)
+    return [(suit, num), (suit, num)]
+
+
+def _any_sequence(suit):
+    """Return a random sequence from the given suit."""
+    start = random.randint(1, 7)
+    return [(suit, start), (suit, start+1), (suit, start+2)]
+
+
+def _any_triplet(suit):
+    num = random.randint(1, 9) if suit != "z" else random.randint(1, 7)
+    return [(suit, num), (suit, num), (suit, num)]
+
+
+def _build_tanyao():
+    """4 melds + 1 pair, all tiles 2-8, no honors."""
     tiles = []
-    for s in suits:
-        for _ in range(suit_counts[s]):
-            tiles.append((s, random.randint(2, 8)))
-
-    random.shuffle(tiles)
-    return _make_winning_hand(tiles)
-
-
-def _generate_yakuhai():
-    """Generate a hand with at least one yakuhai (honor triplet)."""
-    tiles = []
-    # Add a honor triplet
-    honor = random.randint(1, 7)
-    for _ in range(3):
-        tiles.append(("z", honor))
-    # Fill rest with numeric tiles
-    for _ in range(11):
-        s = random.choice("wps")
-        tiles.append((s, random.randint(1, 9)))
-    random.shuffle(tiles)
-    return _make_winning_hand(tiles[:14])
-
-
-def _generate_toitoi():
-    """Generate a toitoi (4 triplets + 1 pair) hand."""
-    tiles = []
-    # 4 triplets
+    # 4 melds (sequences or triplets, all 2-8)
     for _ in range(4):
-        s = random.choice("wpsz")
-        n = random.randint(1, 9) if s != "z" else random.randint(1, 7)
-        for _ in range(3):
-            tiles.append((s, n))
-    # 1 pair  
-    s = random.choice("wpsz")
-    n = random.randint(1, 9) if s != "z" else random.randint(1, 7)
-    for _ in range(2):
-        tiles.append((s, n))
-    random.shuffle(tiles)
+        if random.random() < 0.6:
+            tiles += _random_sequence()
+        else:
+            tiles += _random_triplet()
+    # 1 pair (2-8, no honor)
+    tiles += _random_pair()
     return tiles
 
 
-def _generate_chiitoitsu():
-    """Generate a chiitoitsu (7 pairs) hand."""
+def _build_yakuhai():
+    """Hand with at least one honor triplet (yakuhai)."""
+    tiles = []
+    # One honor triplet
+    honor_num = random.randint(1, 7)
+    tiles += [("z", honor_num)] * 3
+    # 3 more melds
+    for _ in range(3):
+        if random.random() < 0.5:
+            tiles += _random_sequence()
+        else:
+            tiles += _random_triplet()
+    # 1 pair
+    tiles += _random_pair()
+    return tiles
+
+
+def _build_toitoi():
+    """4 triplets + 1 pair (all triplets)."""
+    tiles = []
+    for _ in range(4):
+        tiles += _random_triplet()
+    tiles += _random_pair()
+    return tiles
+
+
+def _build_chiitoitsu():
+    """7 distinct pairs."""
     tiles = []
     used = set()
     for _ in range(7):
         while True:
             s = random.choice("wpsz")
             n = random.randint(1, 9) if s != "z" else random.randint(1, 7)
-            key = (s, n)
-            if key not in used:
-                used.add(key)
+            if (s, n) not in used:
+                used.add((s, n))
                 break
-        tiles.append((s, n))
-        tiles.append((s, n))
-    random.shuffle(tiles)
+        tiles += [(s, n), (s, n)]
     return tiles
 
 
-def _generate_iipeikou():
-    """Generate an iipeikou (two identical sequences) hand."""
+def _build_iipeikou():
+    """Two identical sequences + other melds."""
     suit = random.choice("wps")
     start = random.randint(1, 7)
-    seq = [start, start+1, start+2]
-
-    tiles = []
-    # Two identical sequences
+    seq = [(suit, start), (suit, start+1), (suit, start+2)]
+    tiles = seq + seq  # two identical sequences (6 tiles)
+    # 2 more melds (4 tiles total needed, minus 6 = need 8 more)
     for _ in range(2):
-        for n in seq:
-            tiles.append((suit, n))
-
-    # Fill the rest (8 more tiles = one pair + 2 melds)
-    # Add a pair
-    p_suit = random.choice("wpsz")
-    p_n = random.randint(1, 9) if p_suit != "z" else random.randint(1, 7)
-    tiles.append((p_suit, p_n))
-    tiles.append((p_suit, p_n))
-
-    # Add 6 more tiles as triplets or chi
-    for _ in range(6):
-        s2 = random.choice("wpsz")
-        n2 = random.randint(1, 9) if s2 != "z" else random.randint(1, 7)
-        tiles.append((s2, n2))
-
-    random.shuffle(tiles)
-    return _make_winning_hand(tiles[:14])
+        if random.random() < 0.5:
+            tiles += _random_sequence()
+        else:
+            tiles += _random_triplet()
+    tiles += _random_pair()
+    return tiles
 
 
-def _generate_mixed():
-    """Generate a random hand that might have a yaku."""
+def _build_pinfu():
+    """All sequences, non-yakuhai pair, two-sided wait."""
     tiles = []
-    for _ in range(14):
-        s = random.choice("wpsz")
-        n = random.randint(1, 9) if s != "z" else random.randint(1, 7)
-        tiles.append((s, n))
-    return _make_winning_hand(tiles)
-
-
-def _make_winning_hand(tiles):
-    """Ensure last tile is the 'winning tile' by putting it out of order."""
-    if len(tiles) < 14:
-        return None
-    # Sort first 13 tiles by suit then number
-    suit_order = {"w": 0, "p": 1, "s": 2, "z": 3}
-    first13 = sorted(tiles[:13], key=lambda t: (suit_order.get(t[0], 99), t[1]))
-    return first13 + [tiles[13]]
+    for _ in range(4):
+        tiles += _random_sequence()
+    # Pair: not yakuhai, not the same suit's triplets
+    ps = random.choice("wps")
+    pn = random.randint(2, 8)
+    tiles += [(ps, pn), (ps, pn)]
+    return tiles
 
 
 def validate_hand(tiles):
@@ -350,3 +343,24 @@ def compare_guess(guess_tiles, target_tiles):
             result.append((g, "absent"))
 
     return result
+
+
+def describe_tile(tile):
+    """Convert a tile tuple to Chinese name."""
+    s, n = tile
+    if s == "z":
+        names = {1: "東", 2: "南", 3: "西", 4: "北", 5: "白", 6: "発", 7: "中"}
+        return names.get(n, str(n))
+    suits = {"w": "万", "p": "筒", "s": "索"}
+    chinese_nums = {1: "一", 2: "二", 3: "三", 4: "四", 5: "五", 6: "六", 7: "七", 8: "八", 9: "九"}
+    return f"{chinese_nums.get(n, str(n))}{suits.get(s, s)}"
+
+
+def describe_result(comp_result):
+    """Convert comparison result to a human-readable Chinese string."""
+    status_names = {"correct": "绿色", "present": "黄色", "absent": "灰色"}
+    parts = []
+    for tile, status in comp_result:
+        name = describe_tile(tile)
+        parts.append(f"{name}({status_names[status]})")
+    return " ".join(parts)
