@@ -319,10 +319,10 @@ def validate_hand(tiles):
         elif s in "wps" and n not in range(1, 10):
             return False, f"无效数牌: {s}{n}"
     return True, ""
-    """Compare guess with target. Returns list of (tile, status) where status is 'correct', 'present', or 'absent'.
-    
-    For the winning tile (last position), it's only compared with the target's winning tile.
-    """
+
+
+def compare_guess(guess_tiles, target_tiles):
+    """Compare guess with target. Returns list of (tile, status) where status is 'correct', 'present', or 'absent'."""
     result = []
     # Count target tiles (excluding winning tile)
     target_counts = {}
