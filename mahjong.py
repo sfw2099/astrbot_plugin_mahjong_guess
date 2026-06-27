@@ -322,34 +322,31 @@ def validate_hand(tiles):
 
 
 def compare_guess(guess_tiles, target_tiles):
-    """Compare guess with target. Returns list of (tile, status) where status is 'correct', 'present', or 'absent'."""
-    result = []
-    # Count target tiles (excluding winning tile)
+    """Compare guess with target using tile counts (set-based, not positional).
+    - Green: you have this tile, within the correct count
+    - Yellow: tile is in target, but you have too many of this type
+    - Gray: tile is not in the target at all
+    """
     target_counts = {}
     for t in target_tiles:
         target_counts[t] = target_counts.get(t, 0) + 1
 
-    # First pass: mark exact matches (correct)
-    used = {}
-    for i, g in enumerate(guess_tiles):
-        if i < len(target_tiles):
-            t = target_tiles[i]
-            if g == t and used.get(g, 0) < target_counts.get(g, 0):
-                result.append((g, "correct"))
-                used[g] = used.get(g, 0) + 1
-                target_counts[g] -= 1
-            else:
-                result.append((g, None))
+    guess_counts = {}
+    for t in guess_tiles:
+        guess_counts[t] = guess_counts.get(t, 0) + 1
+
+    correct_remaining = {}
+    for t, c in guess_counts.items():
+        correct_remaining[t] = min(c, target_counts.get(t, 0))
+
+    result = []
+    for g in guess_tiles:
+        if correct_remaining.get(g, 0) > 0:
+            result.append((g, "correct"))
+            correct_remaining[g] -= 1
+        elif g in target_counts:
+            result.append((g, "present"))
         else:
             result.append((g, "absent"))
-
-    # Second pass: mark present but wrong position
-    for i, (g, status) in enumerate(result):
-        if status is None:
-            if target_counts.get(g, 0) > 0:
-                result[i] = (g, "present")
-                target_counts[g] -= 1
-            else:
-                result[i] = (g, "absent")
 
     return result
