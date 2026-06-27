@@ -1,6 +1,6 @@
 name: astrbot_plugin_mahjong_guess
 display_name: 立直麻将猜胡牌
 desc: 立直麻将Wordle风格猜胡牌游戏，输入牌型猜胡牌手，绿色/黄色/灰色反馈
-version: v0.1.6
+version: v0.1.7
 author: ALin
 repo: https://github.com/sfw2099/astrbot_plugin_mahjong_guess

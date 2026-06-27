@@ -25,9 +25,29 @@ def tile_str(t):
     return f"{s}{n}"
 
 
-def hand_str(tiles):
+def hand_str(tiles, separate_win=True):
+    """Convert tile list to display string. Winning tile (last) separated if separate_win=True."""
+    if len(tiles) != 14:
+        suits = {"w": [], "p": [], "s": [], "z": []}
+        for s, n in tiles:
+            suits[s].append(n)
+        parts = []
+        for s in "wpsz":
+            if suits[s]:
+                nums = suits[s]
+                nums.sort()
+                if s == "z":
+                    parts.append("z" + "".join(HONOR_NAMES.get(n, str(n)) for n in nums))
+                else:
+                    parts.append(s + "".join(str(n) for n in nums))
+        return " ".join(parts)
+
+    suit_order = {"w": 0, "p": 1, "s": 2, "z": 3}
+    first13 = sorted(tiles[:13], key=lambda t: (suit_order.get(t[0], 99), t[1]))
+    win_tile = tiles[13]
+
     suits = {"w": [], "p": [], "s": [], "z": []}
-    for s, n in tiles:
+    for s, n in first13:
         suits[s].append(n)
     parts = []
     for s in "wpsz":
@@ -38,7 +58,10 @@ def hand_str(tiles):
                 parts.append("z" + "".join(HONOR_NAMES.get(n, str(n)) for n in nums))
             else:
                 parts.append(s + "".join(str(n) for n in nums))
-    return " ".join(parts)
+
+    main = " ".join(parts)
+    wt = describe_tile(win_tile) if separate_win else tile_str(win_tile)
+    return f"{main} 河底[{wt}]" if separate_win else f"{main} {tile_str(win_tile)}"
 
 
 def parse_hand(text):

@@ -4,7 +4,7 @@ import random
 import logging
 from astrbot.api.all import *
 from .mahjong import generate_valid_hand, parse_hand, compare_guess, hand_str, validate_hand, is_valid_hand, describe_result
-from .renderer import render_guess, render_rules
+from .renderer import render_guess, render_rules, render_rules
 
 logger = logging.getLogger("astrbot")
 
@@ -51,6 +51,9 @@ class MahjongGuessPlugin(Star):
         session_id = event.get_session_id()
         if session_id in self.sessions:
             ans = self.sessions[session_id]["target"]
+            ans_path = os.path.join(self.plugin_dir, f"temp_ans_{session_id}.png")
+            render_rules(ans, ans_path)
+            yield event.image_result(ans_path)
             yield event.plain_result(f"游戏结束，正确牌型：{hand_str(ans)}")
             del self.sessions[session_id]
 
@@ -105,6 +108,9 @@ class MahjongGuessPlugin(Star):
                 os.remove(img_path)
             del self.sessions[session_id]
         elif session["tries"] >= self.max_attempts:
+            ans_path = os.path.join(self.plugin_dir, f"temp_ans_{session_id}.png")
+            render_rules(session["target"], ans_path)
+            yield event.image_result(ans_path)
             yield event.plain_result(f"机会耗尽！正确牌型：{hand_str(session['target'])}")
             if os.path.exists(img_path):
                 os.remove(img_path)
