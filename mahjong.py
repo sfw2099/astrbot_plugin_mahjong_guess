@@ -135,6 +135,18 @@ def find_yaku(tiles, seat_wind=1, round_wind=1):
         if (s, n) in yakuhai_tiles and c >= 3:
             yaku.append("役牌")
 
+    # 平和: 4 sequences + non-yakuhai pair, ryanmen wait
+    if _is_valid_standard(tiles):
+        for t, c in counts.items():
+            if c >= 2 and t not in yakuhai_tiles:
+                c2 = {k: v for k, v in counts.items()}
+                c2[t] -= 2
+                if c2[t] == 0:
+                    del c2[t]
+                if _can_decompose_into_sequences(c2, 4):
+                    yaku.append("平和")
+                    break
+
     # 断幺九: all 2-8, no honors
     if all(s != "z" and 2 <= n <= 8 for s, n in tiles):
         yaku.append("断幺九")
@@ -199,6 +211,26 @@ def find_yaku(tiles, seat_wind=1, round_wind=1):
     return yaku
 
 
+def _can_decompose_into_sequences(counts, remaining_seqs):
+    """Check if remaining tiles can form `remaining_seqs` sequences (NO triplets)."""
+    if remaining_seqs == 0:
+        return len(counts) == 0
+    if not counts:
+        return False
+    for s in "wps":
+        for n in range(1, 8):
+            seq = [(s, n), (s, n+1), (s, n+2)]
+            if all(counts.get(t, 0) >= 1 for t in seq):
+                updated = dict(counts)
+                for t in seq:
+                    updated[t] -= 1
+                    if updated[t] == 0:
+                        del updated[t]
+                if _can_decompose_into_sequences(updated, remaining_seqs - 1):
+                    return True
+    return False
+
+
 def generate_valid_hand(seat_wind=1, round_wind=1):
     """Generate a valid 14-tile Riichi mahjong hand with at least one yaku."""
     builders = [
@@ -230,78 +262,139 @@ def _build_yakuhai_with_honor(honor_num):
     tiles = [("z", honor_num)] * 3
     for _ in range(3):
         if random.random() < 0.5:
-            tiles += _random_sequence()
+            new = _random_sequence(existing=tiles)
         else:
-            tiles += _random_triplet()
-    tiles += _random_pair()
+            new = _random_triplet(existing=tiles)
+        if not new:
+            return None
+        tiles += new
+    new = _random_pair(existing=tiles)
+    if not new:
+        return None
+    tiles += new
     return tiles
 
 
-def _random_sequence(suit=None):
-    """Return a random sequence of 3 tiles like ('w',1),('w',2),('w',3)."""
-    if suit is None:
-        suit = random.choice("wps")
-    start = random.randint(1, 7)
-    return [(suit, start), (suit, start+1), (suit, start+2)]
+def _check_tile_limit(new_tiles, existing):
+    """Check if adding new_tiles to existing keeps each tile count <= 4."""
+    if not existing:
+        return True
+    all_counts = {}
+    for t in existing:
+        all_counts[t] = all_counts.get(t, 0) + 1
+    for t in new_tiles:
+        all_counts[t] = all_counts.get(t, 0) + 1
+        if all_counts[t] > 4:
+            return False
+    return True
 
 
-def _random_triplet(suit=None, num=None):
-    """Return 3 copies of a random tile."""
-    if suit is None:
-        suit = random.choice("wpsz")
-    if num is None:
-        num = random.randint(2, 8) if suit != "z" else random.randint(1, 7)
-    return [(suit, num), (suit, num), (suit, num)]
+def _random_sequence(suit=None, existing=None, start_range=None):
+    """Return a random sequence of 3 tiles, ensuring no tile exceeds 4 copies."""
+    for _ in range(100):
+        s = suit if suit else random.choice("wps")
+        lo, hi = start_range if start_range else (1, 7)
+        start = random.randint(lo, hi)
+        seq = [(s, start), (s, start+1), (s, start+2)]
+        if _check_tile_limit(seq, existing):
+            return seq
+    suits = [suit] if suit else list("wps")
+    lo, hi = start_range if start_range else (1, 7)
+    for s in suits:
+        for start in range(lo, hi + 1):
+            seq = [(s, start), (s, start+1), (s, start+2)]
+            if _check_tile_limit(seq, existing):
+                return seq
+    return []
 
 
-def _random_pair(suit=None, num=None):
-    """Return 2 copies of a random tile."""
-    if suit is None:
-        suit = random.choice("wpsz")
-    if num is None:
-        num = random.randint(2, 8) if suit != "z" else random.randint(1, 7)
-    return [(suit, num), (suit, num)]
+def _random_triplet(suit=None, num=None, existing=None, num_range=None):
+    """Return 3 copies of a tile, ensuring no tile exceeds 4 copies."""
+    for _ in range(100):
+        s = suit if suit else random.choice("wpsz")
+        lo, hi = num_range if num_range else (2, 8) if s != "z" else (1, 7)
+        n = num if num is not None else random.randint(lo, hi)
+        trip = [(s, n)] * 3
+        if _check_tile_limit(trip, existing):
+            return trip
+    suits = [suit] if suit else list("wpsz")
+    for s in suits:
+        lo, hi = num_range if num_range else (1, 9) if s != "z" else (1, 7)
+        for n in range(lo, hi + 1):
+            if num is not None and n != num:
+                continue
+            trip = [(s, n)] * 3
+            if _check_tile_limit(trip, existing):
+                return trip
+    return []
 
 
-def _any_sequence(suit):
-    """Return a random sequence from the given suit."""
-    start = random.randint(1, 7)
-    return [(suit, start), (suit, start+1), (suit, start+2)]
+def _random_pair(suit=None, num=None, existing=None, num_range=None):
+    """Return 2 copies of a tile, ensuring no tile exceeds 4 copies."""
+    for _ in range(100):
+        s = suit if suit else random.choice("wpsz")
+        lo, hi = num_range if num_range else (2, 8) if s != "z" else (1, 7)
+        n = num if num is not None else random.randint(lo, hi)
+        pair = [(s, n)] * 2
+        if _check_tile_limit(pair, existing):
+            return pair
+    suits = [suit] if suit else list("wpsz")
+    for s in suits:
+        lo, hi = num_range if num_range else (1, 9) if s != "z" else (1, 7)
+        for n in range(lo, hi + 1):
+            if num is not None and n != num:
+                continue
+            pair = [(s, n)] * 2
+            if _check_tile_limit(pair, existing):
+                return pair
+    return []
 
 
-def _any_triplet(suit):
+def _any_sequence(suit, existing=None):
+    """Return a random sequence from the given suit, respecting tile limits."""
+    return _random_sequence(suit=suit, existing=existing)
+
+
+def _any_triplet(suit, existing=None):
     num = random.randint(1, 9) if suit != "z" else random.randint(1, 7)
-    return [(suit, num), (suit, num), (suit, num)]
+    return _random_triplet(suit=suit, num=num, existing=existing)
 
 
 def _build_tanyao():
     """4 melds + 1 pair, all tiles 2-8, no honors."""
     tiles = []
-    # 4 melds (sequences or triplets, all 2-8)
     for _ in range(4):
         if random.random() < 0.6:
-            tiles += _random_sequence()
+            new = _random_sequence(existing=tiles, start_range=(2, 6))
         else:
-            tiles += _random_triplet()
-    # 1 pair (2-8, no honor)
-    tiles += _random_pair()
+            new = _random_triplet(existing=tiles, num_range=(2, 8))
+        if not new:
+            return None
+        tiles += new
+    new = _random_pair(existing=tiles, num_range=(2, 8))
+    if not new:
+        return None
+    tiles += new
     return tiles
 
 
 def _build_yakuhai():
     """Hand with at least one honor triplet (yakuhai)."""
     tiles = []
-    # One honor triplet
     honor_num = random.randint(1, 7)
     tiles += [("z", honor_num)] * 3
-    # 3 more melds
     for _ in range(3):
         if random.random() < 0.5:
-            tiles += _random_sequence()
+            new = _random_sequence(existing=tiles)
         else:
-            tiles += _random_triplet()
-    # 1 pair
-    tiles += _random_pair()
+            new = _random_triplet(existing=tiles)
+        if not new:
+            return None
+        tiles += new
+    new = _random_pair(existing=tiles)
+    if not new:
+        return None
+    tiles += new
     return tiles
 
 
@@ -309,8 +402,14 @@ def _build_toitoi():
     """4 triplets + 1 pair (all triplets)."""
     tiles = []
     for _ in range(4):
-        tiles += _random_triplet()
-    tiles += _random_pair()
+        new = _random_triplet(existing=tiles)
+        if not new:
+            return None
+        tiles += new
+    new = _random_pair(existing=tiles)
+    if not new:
+        return None
+    tiles += new
     return tiles
 
 
@@ -334,14 +433,19 @@ def _build_iipeikou():
     suit = random.choice("wps")
     start = random.randint(1, 7)
     seq = [(suit, start), (suit, start+1), (suit, start+2)]
-    tiles = seq + seq  # two identical sequences (6 tiles)
-    # 2 more melds (4 tiles total needed, minus 6 = need 8 more)
+    tiles = seq + seq
     for _ in range(2):
         if random.random() < 0.5:
-            tiles += _random_sequence()
+            new = _random_sequence(existing=tiles)
         else:
-            tiles += _random_triplet()
-    tiles += _random_pair()
+            new = _random_triplet(existing=tiles)
+        if not new:
+            return None
+        tiles += new
+    new = _random_pair(existing=tiles)
+    if not new:
+        return None
+    tiles += new
     return tiles
 
 
@@ -349,10 +453,20 @@ def _build_pinfu():
     """All sequences, non-yakuhai pair, two-sided wait."""
     tiles = []
     for _ in range(4):
-        tiles += _random_sequence()
+        new = _random_sequence(existing=tiles)
+        if not new:
+            return None
+        tiles += new
     ps = random.choice("wps")
     pn = random.randint(2, 8)
-    tiles += [(ps, pn), (ps, pn)]
+    pair = [(ps, pn), (ps, pn)]
+    if not _check_tile_limit(pair, tiles):
+        new = _random_pair(existing=tiles, num_range=(2, 8))
+        if not new:
+            return None
+        tiles += new
+    else:
+        tiles += pair
     return tiles
 
 
@@ -375,14 +489,28 @@ def _build_honchantaiyao():
         kind = random.random()
         if kind < 0.3:
             t = random.choice("wps")
-            tiles += [(t, random.choice([1, 2, 3, 7, 8, 9])), (t, random.choice([1, 2, 3])), (t, random.choice([7, 8, 9]))]
+            new_tiles = [(t, random.choice([1, 2, 3, 7, 8, 9])), (t, random.choice([1, 2, 3])), (t, random.choice([7, 8, 9]))]
+            if not _check_tile_limit(new_tiles, tiles):
+                continue
+            tiles += new_tiles
         elif kind < 0.6:
             su = random.choice("wps")
             start = random.choice([1, 7])
-            tiles += [(su, start), (su, start+1), (su, start+2)]
+            new_tiles = [(su, start), (su, start+1), (su, start+2)]
+            if not _check_tile_limit(new_tiles, tiles):
+                continue
+            tiles += new_tiles
         else:
-            tiles += _random_triplet(random.choice("z"))
-    tiles += _random_pair()
+            new = _random_triplet(suit="z", existing=tiles)
+            if not new:
+                continue
+            tiles += new
+    if len(tiles) < 12:
+        return None
+    new = _random_pair(existing=tiles)
+    if not new:
+        return None
+    tiles += new
     return tiles
 
 
@@ -392,8 +520,14 @@ def _build_sanshoku_doukou():
     tiles = []
     for s in "wps":
         tiles += [(s, num)] * 3
-    tiles += _random_triplet()
-    tiles += _random_pair()
+    new = _random_triplet(existing=tiles)
+    if not new:
+        return None
+    tiles += new
+    new = _random_pair(existing=tiles)
+    if not new:
+        return None
+    tiles += new
     return tiles
 
 
@@ -401,8 +535,14 @@ def _build_ikkitsuukan():
     """一气通贯: 1-9 straight in one suit."""
     suit = random.choice("wps")
     tiles = [(suit, 1), (suit, 2), (suit, 3), (suit, 4), (suit, 5), (suit, 6), (suit, 7), (suit, 8), (suit, 9)]
-    tiles += _random_triplet()
-    tiles += _random_pair()
+    new = _random_triplet(existing=tiles)
+    if not new:
+        return None
+    tiles += new
+    new = _random_pair(existing=tiles)
+    if not new:
+        return None
+    tiles += new
     return tiles
 
 
@@ -412,8 +552,14 @@ def _build_sanshoku_doujun():
     tiles = []
     for s in "wps":
         tiles += [(s, start), (s, start+1), (s, start+2)]
-    tiles += _random_triplet()
-    tiles += _random_pair()
+    new = _random_triplet(existing=tiles)
+    if not new:
+        return None
+    tiles += new
+    new = _random_pair(existing=tiles)
+    if not new:
+        return None
+    tiles += new
     return tiles
 
 
@@ -424,23 +570,37 @@ def _build_honitsu():
     hon = random.choice([0, 1, 2, 3])
     for _ in range(4 - hon):
         if random.random() < 0.5:
-            tiles += _random_sequence(suit)
+            new = _random_sequence(suit=suit, existing=tiles)
         else:
-            tiles += _random_triplet(suit)
+            new = _random_triplet(suit=suit, existing=tiles)
+        if not new:
+            return None
+        tiles += new
     for _ in range(hon):
-        tiles += _random_triplet("z")
-    tiles += _random_pair()
+        new = _random_triplet(suit="z", existing=tiles)
+        if not new:
+            return None
+        tiles += new
+    s = random.choice([suit, "z"])
+    new = _random_pair(suit=s, existing=tiles)
+    if not new:
+        return None
+    tiles += new
     return tiles
 
 
 def _build_tsuuiisou():
-    """字一色: all honor tiles."""
+    """字一色: all honor tiles, no tile exceeds 4 copies."""
     tiles = []
     for _ in range(4):
-        n = random.randint(1, 7)
-        tiles += [("z", n)] * 3
-    n = random.randint(1, 7)
-    tiles += [("z", n), ("z", n)]
+        new = _random_triplet(suit="z", existing=tiles)
+        if not new:
+            return None
+        tiles += new
+    new = _random_pair(suit="z", existing=tiles)
+    if not new:
+        return None
+    tiles += new
     return tiles
 
 
@@ -451,9 +611,12 @@ def _build_shousuushi():
     pair_wind = winds[3]
     tiles = []
     for i in range(3):
-        tiles += winds[i:i+1] * 3  # triplet
-    tiles += [pair_wind, pair_wind]  # pair
-    tiles += _random_triplet()
+        tiles += winds[i:i+1] * 3
+    tiles += [pair_wind, pair_wind]
+    new = _random_triplet(existing=tiles)
+    if not new:
+        return None
+    tiles += new
     return tiles
 
 
