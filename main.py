@@ -9,12 +9,15 @@ from .renderer import render_guess
 logger = logging.getLogger("astrbot")
 
 
-@register("astrbot_plugin_mahjong_guess", "ALin", "立直麻将猜胡牌", "0.1.0")
+@register("astrbot_plugin_mahjong_guess", "ALin", "立直麻将猜胡牌", "0.1.1")
 class MahjongGuessPlugin(Star):
-    def __init__(self, context: Context):
+    def __init__(self, context: Context, config: AstrBotConfig = None):
         super().__init__(context)
         self.plugin_dir = os.path.dirname(os.path.abspath(__file__))
         self.sessions = {}
+        cfg = config or {}
+        self.max_attempts = cfg.get("max_attempts", 10)
+        self.show_yaku_hint = cfg.get("show_yaku_hint", True)
 
         logger.info("[mahjong] 立直麻将猜胡牌插件已加载")
 
@@ -28,7 +31,11 @@ class MahjongGuessPlugin(Star):
         hand = generate_valid_hand()
         yaku_list = find_yaku(hand)
         yaku_text = "、".join(yaku_list) if yaku_list else "无役"
-        
+
+        hint = ""
+        if self.show_yaku_hint:
+            hint = f"\n役种提示：{yaku_text}"
+
         self.sessions[session_id] = {
             "target": hand,
             "history": [],
@@ -36,9 +43,8 @@ class MahjongGuessPlugin(Star):
         }
 
         yield event.plain_result(
-            f"【立直麻将猜胡牌】开始！\n"
-            f"役种提示：{yaku_text}\n"
-            f"格式：w112233 s445566 p77（最多 10 次机会）\n"
+            f"【立直麻将猜胡牌】开始！{hint}\n"
+            f"格式：w112233 s445566 p77（最多 {self.max_attempts} 次机会）\n"
             f"字牌可用中文：z東東東 或 z111"
         )
 
@@ -82,7 +88,7 @@ class MahjongGuessPlugin(Star):
             if os.path.exists(img_path):
                 os.remove(img_path)
             del self.sessions[session_id]
-        elif session["tries"] >= 10:
+        elif session["tries"] >= self.max_attempts:
             yield event.plain_result(f"机会耗尽！正确牌型：{hand_str(session['target'])}")
             if os.path.exists(img_path):
                 os.remove(img_path)
