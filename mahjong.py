@@ -237,49 +237,6 @@ def _build_yakuhai_with_honor(honor_num):
     return tiles
 
 
-YAKU_BUILDERS = {
-    "断幺九": _build_tanyao,
-    "役牌": lambda: _build_yakuhai_with_honor(random.choice([1,2,3,4,5,6,7])),
-    "对对和": _build_toitoi,
-    "七对子": _build_chiitoitsu,
-    "一盃口": _build_iipeikou,
-    "平和": _build_pinfu,
-    "国士无双": _build_kokushi,
-    "三色同刻": _build_sanshoku_doukou,
-    "一气通贯": _build_ikkitsuukan,
-    "三色同顺": _build_sanshoku_doujun,
-    "混一色": _build_honitsu,
-    "字一色": _build_tsuuiisou,
-    "小四喜": _build_shousuushi,
-}
-
-
-def generate_hand_with_yaku(yaku_name, seat_wind=1, round_wind=1):
-    """Generate a hand with a specific yaku. Returns None if not found."""
-    if not yaku_name:
-        return generate_valid_hand(seat_wind, round_wind)
-
-    builder = YAKU_BUILDERS.get(yaku_name)
-    if builder is None:
-        # Try partial match
-        for name, b in YAKU_BUILDERS.items():
-            if yaku_name in name or name in yaku_name:
-                builder = b
-                break
-        if builder is None:
-            return None
-
-    for _ in range(200):
-        tiles = builder()
-        if tiles and len(tiles) == 14 and yaku_name in find_yaku(tiles, seat_wind, round_wind):
-            hand = list(tiles)
-            random.shuffle(hand)
-            win_tile = hand[-1]
-            first13 = sorted(hand[:13], key=lambda t: ({"w":0,"p":1,"s":2,"z":3}[t[0]], t[1]))
-            return first13 + [win_tile]
-    return None
-
-
 def _random_sequence(suit=None):
     """Return a random sequence of 3 tiles like ('w',1),('w',2),('w',3)."""
     if suit is None:
@@ -498,6 +455,48 @@ def _build_shousuushi():
     tiles += [pair_wind, pair_wind]  # pair
     tiles += _random_triplet()
     return tiles
+
+
+YAKU_BUILDERS = {
+    "断幺九": _build_tanyao,
+    "役牌": lambda: _build_yakuhai_with_honor(random.choice([1,2,3,4,5,6,7])),
+    "对对和": _build_toitoi,
+    "七对子": _build_chiitoitsu,
+    "一盃口": _build_iipeikou,
+    "平和": _build_pinfu,
+    "国士无双": _build_kokushi,
+    "三色同刻": _build_sanshoku_doukou,
+    "一气通贯": _build_ikkitsuukan,
+    "三色同顺": _build_sanshoku_doujun,
+    "混一色": _build_honitsu,
+    "字一色": _build_tsuuiisou,
+    "小四喜": _build_shousuushi,
+}
+
+
+def generate_hand_with_yaku(yaku_name, seat_wind=1, round_wind=1):
+    """Generate a hand with a specific yaku. Returns None if not found."""
+    if not yaku_name:
+        return generate_valid_hand(seat_wind, round_wind)
+
+    builder = YAKU_BUILDERS.get(yaku_name)
+    if builder is None:
+        for name, b in YAKU_BUILDERS.items():
+            if yaku_name in name or name in yaku_name:
+                builder = b
+                break
+        if builder is None:
+            return None
+
+    for _ in range(200):
+        tiles = builder()
+        if tiles and len(tiles) == 14 and yaku_name in find_yaku(tiles, seat_wind, round_wind):
+            hand = list(tiles)
+            random.shuffle(hand)
+            win_tile = hand[-1]
+            first13 = sorted(hand[:13], key=lambda t: ({"w":0,"p":1,"s":2,"z":3}[t[0]], t[1]))
+            return first13 + [win_tile]
+    return None
 
 
 def validate_hand(tiles):
