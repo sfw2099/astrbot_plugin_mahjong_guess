@@ -309,7 +309,16 @@ def _make_winning_hand(tiles):
     return first13 + [tiles[13]]
 
 
-def compare_guess(guess_tiles, target_tiles):
+def validate_hand(tiles):
+    """Validate parsed hand. Returns (True, "") or (False, error_message)."""
+    if len(tiles) != 14:
+        return False, f"手牌必须为 14 张，当前 {len(tiles)} 张。"
+    for s, n in tiles:
+        if s == "z" and n not in range(1, 8):
+            return False, f"无效字牌: z{n}"
+        elif s in "wps" and n not in range(1, 10):
+            return False, f"无效数牌: {s}{n}"
+    return True, ""
     """Compare guess with target. Returns list of (tile, status) where status is 'correct', 'present', or 'absent'.
     
     For the winning tile (last position), it's only compared with the target's winning tile.

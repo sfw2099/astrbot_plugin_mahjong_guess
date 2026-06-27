@@ -3,13 +3,13 @@ import json
 import random
 import logging
 from astrbot.api.all import *
-from .mahjong import generate_valid_hand, parse_hand, compare_guess, hand_str, find_yaku
-from .renderer import render_guess
+from .mahjong import generate_valid_hand, parse_hand, compare_guess, hand_str, validate_hand
+from .renderer import render_guess, render_rules
 
 logger = logging.getLogger("astrbot")
 
 
-@register("astrbot_plugin_mahjong_guess", "ALin", "立直麻将猜胡牌", "0.1.1")
+@register("astrbot_plugin_mahjong_guess", "ALin", "立直麻将猜胡牌", "0.1.2")
 class MahjongGuessPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig = None):
         super().__init__(context)
@@ -17,7 +17,6 @@ class MahjongGuessPlugin(Star):
         self.sessions = {}
         cfg = config or {}
         self.max_attempts = cfg.get("max_attempts", 10)
-        self.show_yaku_hint = cfg.get("show_yaku_hint", True)
 
         logger.info("[mahjong] 立直麻将猜胡牌插件已加载")
 
@@ -29,12 +28,6 @@ class MahjongGuessPlugin(Star):
             return
 
         hand = generate_valid_hand()
-        yaku_list = find_yaku(hand)
-        yaku_text = "、".join(yaku_list) if yaku_list else "无役"
-
-        hint = ""
-        if self.show_yaku_hint:
-            hint = f"\n役种提示：{yaku_text}"
 
         self.sessions[session_id] = {
             "target": hand,
@@ -42,10 +35,15 @@ class MahjongGuessPlugin(Star):
             "tries": 0,
         }
 
+        rules_path = os.path.join(self.plugin_dir, "temp_rules.png")
+        render_rules(hand, rules_path)
+        yield event.image_result(rules_path)
         yield event.plain_result(
-            f"【立直麻将猜胡牌】开始！{hint}\n"
-            f"格式：w112233 s445566 p77（最多 {self.max_attempts} 次机会）\n"
-            f"字牌可用中文：z東東東 或 z111"
+            f"【立直麻将猜胡牌】开始！\n"
+            f"格式：w/p/s/z + 数字或中文\n"
+            f"如: w112233 s445566 p77\n"
+            f"字牌: z東東東 或 z111\n"
+            f"共 {self.max_attempts} 次机会，发送 14 张牌开始猜"
         )
 
     @command("结束猜胡牌")
@@ -69,8 +67,17 @@ class MahjongGuessPlugin(Star):
         session = self.sessions[session_id]
         guess = parse_hand(user_input)
 
+        # Validate
         if len(guess) != 14:
-            return  # Silently ignore invalid input
+            if len(guess) == 0:
+                return  # Silently ignore completely unrecognized input
+            yield event.plain_result(f"请发送 14 张手牌（当前 {len(guess)} 张）。格式: w/p/s/z + 数字或中文")
+            return
+
+        valid, err = validate_hand(guess)
+        if not valid:
+            yield event.plain_result(f"手牌格式错误：{err}")
+            return
 
         comp = compare_guess(guess, session["target"])
         session["history"].append((guess, comp))
@@ -83,6 +90,7 @@ class MahjongGuessPlugin(Star):
 
         # Check win/lose
         all_correct = all(s == "correct" for _, s in comp)
+        remaining = self.max_attempts - session["tries"]
         if all_correct:
             yield event.plain_result(f"🎉 猜中了！正确牌型：{hand_str(session['target'])}")
             if os.path.exists(img_path):
@@ -93,6 +101,8 @@ class MahjongGuessPlugin(Star):
             if os.path.exists(img_path):
                 os.remove(img_path)
             del self.sessions[session_id]
+        else:
+            yield event.plain_result(f"继续猜！剩余 {remaining} 次机会")
 
     async def terminate(self):
         self.sessions.clear()

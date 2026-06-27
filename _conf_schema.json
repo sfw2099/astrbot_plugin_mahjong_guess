@@ -9,11 +9,5 @@
             "max": 20,
             "step": 1
         }
-    },
-    "show_yaku_hint": {
-        "type": "bool",
-        "title": "显示役种提示",
-        "description": "游戏开始时提示手牌所含役种",
-        "default": true
     }
 }
