@@ -415,40 +415,34 @@ def _can_form_melds(counts, remaining_melds):
 
 
 def compare_guess(guess_tiles, target_tiles):
-    """Position-based comparison. First 13 are sorted, winning tile at position 13.
+    """Position-based comparison. Target is sorted (first 13 + winning tile at pos 13).
+    Guess is compared as-is (user's input order).
     - Green: correct tile at correct position
     - Yellow: tile exists in target but at wrong position
     - Gray: tile not in target
     """
-    suit_order = {"w": 0, "p": 1, "s": 2, "z": 3}
-
-    g13 = sorted(guess_tiles[:13], key=lambda t: (suit_order.get(t[0], 99), t[1]))
-    t13 = sorted(target_tiles[:13], key=lambda t: (suit_order.get(t[0], 99), t[1]))
-    g_sorted = g13 + [guess_tiles[13]]
-    t_sorted = t13 + [target_tiles[13]]
-
     result = []
-    target_counts = {}
-    for t in t_sorted:
-        target_counts[t] = target_counts.get(t, 0) + 1
+    original_counts = {}
+    remaining_counts = {}
+    for t in target_tiles:
+        original_counts[t] = original_counts.get(t, 0) + 1
+        remaining_counts[t] = remaining_counts.get(t, 0) + 1
 
-    # First pass: exact matches
     used = {}
-    for i, g in enumerate(g_sorted):
-        t = t_sorted[i]
-        if g == t and used.get(g, 0) < target_counts.get(g, 0):
+    for i, g in enumerate(guess_tiles):
+        t = target_tiles[i] if i < len(target_tiles) else None
+        if t is not None and g == t and used.get(g, 0) < original_counts.get(g, 0):
             result.append((g, "correct"))
             used[g] = used.get(g, 0) + 1
-            target_counts[g] -= 1
+            remaining_counts[g] -= 1
         else:
             result.append((g, None))
 
-    # Second pass: present/absent
     for i, (g, status) in enumerate(result):
         if status is None:
-            if target_counts.get(g, 0) > 0:
+            if remaining_counts.get(g, 0) > 0:
                 result[i] = (g, "present")
-                target_counts[g] -= 1
+                remaining_counts[g] -= 1
             else:
                 result[i] = (g, "absent")
 
