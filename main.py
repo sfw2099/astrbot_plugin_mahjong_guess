@@ -3,7 +3,7 @@ import json
 import random
 import logging
 from astrbot.api.all import *
-from .mahjong import generate_valid_hand, parse_hand, compare_guess, hand_str, validate_hand, describe_result
+from .mahjong import generate_valid_hand, parse_hand, compare_guess, hand_str, validate_hand, is_valid_hand, describe_result
 from .renderer import render_guess, render_rules
 
 logger = logging.getLogger("astrbot")
@@ -77,6 +77,10 @@ class MahjongGuessPlugin(Star):
         valid, err = validate_hand(guess)
         if not valid:
             yield event.plain_result(f"手牌格式错误：{err}")
+            return
+
+        if not is_valid_hand(guess):
+            yield event.plain_result("该牌型不是合法胡牌（需要 4 面子 + 1 雀头），请重新提交。")
             return
 
         comp = compare_guess(guess, session["target"])

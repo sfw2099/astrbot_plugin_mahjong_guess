@@ -314,33 +314,120 @@ def validate_hand(tiles):
     return True, ""
 
 
+def is_valid_hand(tiles):
+    """Check if 14 tiles form a valid Riichi winning hand (4 melds + 1 pair, or 7 pairs)."""
+    if len(tiles) != 14:
+        return False
+    return _is_valid_standard(tiles) or _is_chiitoitsu(tiles)
+
+
+def _count_tiles(tiles):
+    counts = {}
+    for t in tiles:
+        counts[t] = counts.get(t, 0) + 1
+    return counts
+
+
+def _is_chiitoitsu(tiles):
+    """7 distinct pairs."""
+    counts = _count_tiles(tiles)
+    return len(counts) == 7 and all(c == 2 for c in counts.values())
+
+
+def _is_valid_standard(tiles):
+    """Check 4 melds + 1 pair by backtracking."""
+    counts = _count_tiles(tiles)
+    total = sum(counts.values())
+    if total != 14:
+        return False
+
+    # Try each possible pair
+    pairs = []
+    for t, c in counts.items():
+        if c >= 2:
+            pairs.append(t)
+
+    for pair in pairs:
+        c = dict(counts)
+        c[pair] -= 2
+        if c[pair] == 0:
+            del c[pair]
+        if _can_form_melds(c, 4):
+            return True
+    return False
+
+
+def _can_form_melds(counts, remaining_melds):
+    """Recursively check if remaining tiles can form `remaining_melds` melds."""
+    if remaining_melds == 0:
+        return len(counts) == 0
+
+    if not counts:
+        return False
+
+    # Try triplet
+    for (s, n), c in list(counts.items()):
+        if c >= 3:
+            updated = dict(counts)
+            updated[(s, n)] -= 3
+            if updated[(s, n)] == 0:
+                del updated[(s, n)]
+            if _can_form_melds(updated, remaining_melds - 1):
+                return True
+
+    # Try sequence (only for w/p/s suits)
+    for s in "wps":
+        for n in range(1, 8):
+            seq = [(s, n), (s, n+1), (s, n+2)]
+            if all(counts.get(t, 0) >= 1 for t in seq):
+                updated = dict(counts)
+                for t in seq:
+                    updated[t] -= 1
+                    if updated[t] == 0:
+                        del updated[t]
+                if _can_form_melds(updated, remaining_melds - 1):
+                    return True
+
+    return False
+
+
 def compare_guess(guess_tiles, target_tiles):
-    """Compare guess with target using tile counts (set-based, not positional).
-    - Green: you have this tile, within the correct count
-    - Yellow: tile is in target, but you have too many of this type
-    - Gray: tile is not in the target at all
+    """Position-based comparison. First 13 are sorted, winning tile at position 13.
+    - Green: correct tile at correct position
+    - Yellow: tile exists in target but at wrong position
+    - Gray: tile not in target
     """
-    target_counts = {}
-    for t in target_tiles:
-        target_counts[t] = target_counts.get(t, 0) + 1
+    suit_order = {"w": 0, "p": 1, "s": 2, "z": 3}
 
-    guess_counts = {}
-    for t in guess_tiles:
-        guess_counts[t] = guess_counts.get(t, 0) + 1
-
-    correct_remaining = {}
-    for t, c in guess_counts.items():
-        correct_remaining[t] = min(c, target_counts.get(t, 0))
+    g13 = sorted(guess_tiles[:13], key=lambda t: (suit_order.get(t[0], 99), t[1]))
+    t13 = sorted(target_tiles[:13], key=lambda t: (suit_order.get(t[0], 99), t[1]))
+    g_sorted = g13 + [guess_tiles[13]]
+    t_sorted = t13 + [target_tiles[13]]
 
     result = []
-    for g in guess_tiles:
-        if correct_remaining.get(g, 0) > 0:
+    target_counts = {}
+    for t in t_sorted:
+        target_counts[t] = target_counts.get(t, 0) + 1
+
+    # First pass: exact matches
+    used = {}
+    for i, g in enumerate(g_sorted):
+        t = t_sorted[i]
+        if g == t and used.get(g, 0) < target_counts.get(g, 0):
             result.append((g, "correct"))
-            correct_remaining[g] -= 1
-        elif g in target_counts:
-            result.append((g, "present"))
+            used[g] = used.get(g, 0) + 1
+            target_counts[g] -= 1
         else:
-            result.append((g, "absent"))
+            result.append((g, None))
+
+    # Second pass: present/absent
+    for i, (g, status) in enumerate(result):
+        if status is None:
+            if target_counts.get(g, 0) > 0:
+                result[i] = (g, "present")
+                target_counts[g] -= 1
+            else:
+                result[i] = (g, "absent")
 
     return result
 
