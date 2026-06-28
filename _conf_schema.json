@@ -13,21 +13,8 @@
     "tile_style": {
         "type": "string",
         "title": "牌面风格",
-        "description": "选择麻将牌面风格",
+        "description": "选择麻将牌面风格：default=FluffyStuff矢量风格, lietxia=雀魂风透明底, hongkong=香港传统风",
         "default": "default",
-        "choices": [
-            {
-                "key": "default",
-                "label": "默认 (FluffyStuff)"
-            },
-            {
-                "key": "lietxia",
-                "label": "雀魂风 (透明底)"
-            },
-            {
-                "key": "hongkong",
-                "label": "香港传统风"
-            }
-        ]
+        "options": ["default", "lietxia", "hongkong"]
     }
 }
