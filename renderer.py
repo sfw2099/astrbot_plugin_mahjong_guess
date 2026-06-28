@@ -12,6 +12,12 @@ COLOR_ABSENT = (180, 180, 180)
 
 _FONT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "STZHONGS.TTF")
 
+_STYLE_DIRS = {
+    "default": "tiles",
+    "lietxia": "tiles_lietxia",
+    "hongkong": "tiles_hongkong",
+}
+
 
 def _get_font(size=14):
     if os.path.exists(_FONT_PATH):
@@ -28,16 +34,17 @@ def _get_font(size=14):
     return ImageFont.load_default()
 
 
-def _tile_path(tile):
-    """Get the image path for a tile."""
+def _tile_path(tile, style="default"):
+    """Get the image path for a tile in the given style."""
     s, n = tile
-    base = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tiles")
+    plugin_dir = os.path.dirname(os.path.abspath(__file__))
+    base = os.path.join(plugin_dir, _STYLE_DIRS.get(style, "tiles"))
     if s == "z":
         return os.path.join(base, f"z{n}.png")
     return os.path.join(base, f"{s}{n}.png")
 
 
-def render_guess(history, target_tiles, output_path):
+def render_guess(history, target_tiles, output_path, style="default"):
     """Render the guess history as an image."""
     header_h = 32
     row_h = TILE_H + GAP * 2 + 4
@@ -72,7 +79,7 @@ def render_guess(history, target_tiles, output_path):
             elif status == "absent":
                 bg = COLOR_ABSENT
 
-            tile_path = _tile_path(tile)
+            tile_path = _tile_path(tile, style)
             if os.path.exists(tile_path):
                 tile_img = Image.open(tile_path).convert("RGBA")
                 tile_img = tile_img.resize((TILE_W - 2, TILE_H - 2), Image.LANCZOS)
@@ -92,7 +99,7 @@ def render_guess(history, target_tiles, output_path):
     return output_path
 
 
-def render_rules(target_tiles, output_path):
+def render_rules(target_tiles, output_path, style="default"):
     """Render a rules/example image showing tile format with one row."""
     cols = 14
     img_w = PAD * 2 + cols * (TILE_W + GAP) - GAP

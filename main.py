@@ -17,6 +17,7 @@ class MahjongGuessPlugin(Star):
         self.sessions = {}
         cfg = config or {}
         self.max_attempts = cfg.get("max_attempts", 10)
+        self.tile_style = cfg.get("tile_style", "default")
 
         logger.info("[mahjong] 立直麻将猜胡牌插件已加载")
 
@@ -68,7 +69,7 @@ class MahjongGuessPlugin(Star):
         yaku_text = "、".join(yaku_list) if yaku_list else "无役"
 
         rules_path = os.path.join(self.plugin_dir, "temp_rand.png")
-        render_rules(hand, rules_path)
+        render_rules(hand, rules_path, self.tile_style)
         yield event.image_result(rules_path)
         yield event.plain_result(
             f"自风: {wind_names[seat_wind]}  场风: {wind_names[round_wind]}\n"
@@ -82,7 +83,7 @@ class MahjongGuessPlugin(Star):
         if session_id in self.sessions:
             ans = self.sessions[session_id]["target"]
             ans_path = os.path.join(self.plugin_dir, f"temp_ans_{session_id}.png")
-            render_rules(ans, ans_path)
+            render_rules(ans, ans_path, self.tile_style)
             yield event.image_result(ans_path)
             yield event.plain_result(f"游戏结束，正确牌型：{hand_str(ans)}")
             del self.sessions[session_id]
@@ -127,7 +128,7 @@ class MahjongGuessPlugin(Star):
 
         # Render result
         img_path = os.path.join(self.plugin_dir, f"temp_{session_id}.png")
-        render_guess(session["history"], session["target"], img_path)
+        render_guess(session["history"], session["target"], img_path, self.tile_style)
         yield event.image_result(img_path)
 
         # Text feedback (log only, not sent to chat)
@@ -144,7 +145,7 @@ class MahjongGuessPlugin(Star):
             del self.sessions[session_id]
         elif session["tries"] >= self.max_attempts:
             ans_path = os.path.join(self.plugin_dir, f"temp_ans_{session_id}.png")
-            render_rules(session["target"], ans_path)
+            render_rules(session["target"], ans_path, self.tile_style)
             yield event.image_result(ans_path)
             yield event.plain_result(f"机会耗尽！正确牌型：{hand_str(session['target'])}")
             if os.path.exists(img_path):
