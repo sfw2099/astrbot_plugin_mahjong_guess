@@ -240,8 +240,9 @@ def generate_valid_hand(seat_wind=1, round_wind=1):
         _build_sanshoku_doujun, _build_honitsu, _build_tsuuiisou,
         _build_shousuushi,
     ]
+    WEIGHTS = [50, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]
     for _ in range(500):
-        builder = random.choice(builders)
+        builder = random.choices(builders, weights=WEIGHTS, k=1)[0]
         if builder in (_build_yakuhai,):
             # yakuhai needs the specific honor that matches winds
             honor = random.choice([seat_wind, round_wind, 5, 6, 7])
