@@ -314,6 +314,7 @@ def _random_triplet(suit=None, num=None, existing=None, num_range=None):
     for _ in range(100):
         s = suit if suit else random.choice("wpsz")
         lo, hi = num_range if num_range else (2, 8) if s != "z" else (1, 7)
+        lo, hi = max(lo, 1), min(hi, 7 if s == "z" else 9)
         n = num if num is not None else random.randint(lo, hi)
         trip = [(s, n)] * 3
         if _check_tile_limit(trip, existing):
@@ -321,6 +322,7 @@ def _random_triplet(suit=None, num=None, existing=None, num_range=None):
     suits = [suit] if suit else list("wpsz")
     for s in suits:
         lo, hi = num_range if num_range else (1, 9) if s != "z" else (1, 7)
+        lo, hi = max(lo, 1), min(hi, 7 if s == "z" else 9)
         for n in range(lo, hi + 1):
             if num is not None and n != num:
                 continue
@@ -335,6 +337,7 @@ def _random_pair(suit=None, num=None, existing=None, num_range=None):
     for _ in range(100):
         s = suit if suit else random.choice("wpsz")
         lo, hi = num_range if num_range else (2, 8) if s != "z" else (1, 7)
+        lo, hi = max(lo, 1), min(hi, 7 if s == "z" else 9)
         n = num if num is not None else random.randint(lo, hi)
         pair = [(s, n)] * 2
         if _check_tile_limit(pair, existing):
@@ -342,6 +345,7 @@ def _random_pair(suit=None, num=None, existing=None, num_range=None):
     suits = [suit] if suit else list("wpsz")
     for s in suits:
         lo, hi = num_range if num_range else (1, 9) if s != "z" else (1, 7)
+        lo, hi = max(lo, 1), min(hi, 7 if s == "z" else 9)
         for n in range(lo, hi + 1):
             if num is not None and n != num:
                 continue
